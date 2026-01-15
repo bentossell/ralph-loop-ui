@@ -117,9 +117,38 @@ const formatTime = (value?: string | null) => {
 	})
 }
 
+const normalizeRepoSlug = (value: string) => {
+	let trimmed = value.trim()
+	if (!trimmed) {
+		return ''
+	}
+
+	if (trimmed.startsWith('git@')) {
+		const [, slug] = trimmed.split(':')
+		if (slug) {
+			trimmed = slug
+		}
+	}
+
+	if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+		try {
+			const url = new URL(trimmed)
+			trimmed = url.pathname
+		} catch {
+			// leave as-is
+		}
+	}
+
+	return trimmed.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '')
+}
+
 const getRepo = () => {
-	const repoSlug = process.env.AGENT_LOOP_REPO ?? 'bentossell/agent-loop'
-	const [owner, repo] = repoSlug.split('/')
+	const repoSlug =
+		process.env.AGENT_LOOP_REPO ??
+		process.env.NEXT_PUBLIC_AGENT_LOOP_REPO ??
+		'bentossell/agent-loop'
+	const normalized = normalizeRepoSlug(repoSlug)
+	const [owner, repo] = normalized.split('/').filter(Boolean)
 
 	if (!owner || !repo) {
 		throw new Error('Invalid AGENT_LOOP_REPO value')
