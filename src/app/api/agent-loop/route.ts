@@ -540,6 +540,50 @@ const buildLogs = (progressText: string, issues: GitHubIssue[]) => {
 	}
 }
 
+export async function POST(request: Request) {
+	try {
+		const body = await request.json() as {
+			title?: string
+			body?: string
+			priority?: Task['priority']
+		}
+
+		const title = body.title?.trim()
+		if (!title) {
+			return NextResponse.json(
+				{ error: 'Title is required' },
+				{ status: 400 },
+			)
+		}
+
+		const { owner, repo } = getRepo()
+		const labels = normalizeLabels([], body.priority ?? 'MEDIUM')
+
+		const createResponse = await githubFetch(`/repos/${owner}/${repo}/issues`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				title,
+				body: body.body ?? '',
+				labels,
+			}),
+		})
+
+		if (!createResponse.ok) {
+			const message = await createResponse.text()
+			return NextResponse.json({ error: message }, { status: 500 })
+		}
+
+		const created = await createResponse.json()
+		return NextResponse.json(created, { status: 201 })
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Unknown error'
+		return NextResponse.json({ error: message }, { status: 500 })
+	}
+}
+
 export async function GET() {
 	try {
 		const { owner, repo } = getRepo()
