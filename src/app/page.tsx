@@ -58,332 +58,33 @@ type LoopResponse = {
 	systemCount: number
 }
 
-const liveActivities: Activity[] = [
-	{
-		icon: 'book',
-		label: 'Reading',
-		detail: 'Wrapper.vue',
-	},
-	{
-		icon: 'search',
-		label: 'Searching',
-		detail: 'toCheckout / createCheckoutSession',
-	},
-	{
-		icon: 'chat',
-		label: 'Responding',
-		detail: 'Perfect. I have all the context I need',
-	},
-]
-
-const columns: Column[] = [
-	{
-		id: 'ready',
-		title: 'Ready',
-		count: 5,
-		accent: 'border-amber-300',
-		tasks: [
-			{
-				id: 'pr-5-9',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-9 Redirect review page to payment',
-				description:
-					'Implement step 10 by updating the review page routing logic',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-				],
-			},
-			{
-				id: 'pr-5-10',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-10 Update ad CTAs for headshot flow',
-				description:
-					'Implement step 11 by updating ad CTA components and links',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-				],
-			},
-			{
-				id: 'pr-5-11',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-11 Add payment tracking to vuex store',
-				description:
-					'Implement step 12 by adding payment tracking state updates',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-				],
-			},
-		],
-	},
-	{
-		id: 'active',
-		title: 'Active',
-		count: 2,
-		accent: 'border-blue-400',
-		tasks: [
-			{
-				id: 'pr-5-7',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-7 Create anonymous checkout endpoint',
-				description:
-					'Implement step 7 by wiring anonymous users into checkout creation',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-				],
-			},
-			{
-				id: 'pr-5-8',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-8 Connect payment route to headshot flow',
-				description:
-					'Implement step 8 by routing payment to onboarding with anon data',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-				],
-			},
-		],
-	},
-	{
-		id: 'review',
-		title: 'Review',
-		count: 7,
-		accent: 'border-purple-400',
-		tasks: [
-			{
-				id: 'pr-5-1',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-1 Set ad visitor flag in localStorage',
-				description:
-					'Implement step 1 by updating ad entry to set localStorage flag',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-					{
-						label: '286fdec',
-						tone: 'slate',
-						icon: 'commit',
-					},
-					{
-						label: 'Summary',
-						tone: 'purple',
-						icon: 'summary',
-					},
-				],
-			},
-			{
-				id: 'pr-5-2',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-2 Create ad visitor helper utilities',
-				description:
-					'Implement step 2 by creating ad visitor helper utilities',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-					{
-						label: 'ecf51df',
-						tone: 'slate',
-						icon: 'commit',
-					},
-					{
-						label: 'Summary',
-						tone: 'purple',
-						icon: 'summary',
-					},
-				],
-			},
-			{
-				id: 'pr-5-3',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-3 Create anonymous Firebase auth utilities',
-				description:
-					'Implement step 3 by creating anonymous auth utilities',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Plan Ready',
-						tone: 'green',
-						icon: 'check',
-					},
-					{
-						label: 'Summary',
-						tone: 'purple',
-						icon: 'summary',
-					},
-				],
-			},
-		],
-	},
-	{
-		id: 'done',
-		title: 'Done',
-		count: 4,
-		accent: 'border-emerald-400',
-		tasks: [
-			{
-				id: 'pr-5-6',
-				priority: 'MEDIUM',
-				group: 'PRD-5',
-				title: 'PRD-5-6 Allow anonymous virtual headshot models',
-				description:
-					'Implement step 6 by updating the model schema and onboarding',
-				tags: [
-					{
-						label: 'feat/late-payment',
-						tone: 'blue',
-						icon: 'branch',
-					},
-					{
-						label: 'Summary',
-						tone: 'purple',
-						icon: 'summary',
-					},
-				],
-			},
-		],
-	},
-]
-
-const logPreview = `### PRD-5-1: Set ad visitor flag in localStorage
-**Date:** 2026-01-15
-
-**Implemented:**
-- Added localStorage flag tracking to ads entry
-- Guarded for existing sessions before writing
-
-**Files Changed:**
-- app/pages/LP/ads.vue
-`
-
-const logExpanded = `### PRD-5-1: Set ad visitor flag in localStorage
-**Date:** 2026-01-15
-
-**Implemented:**
-- Added localStorage flag tracking to ads entry
-- Guarded for existing sessions before writing
-- Updated CTA flow to reuse the existing modal
-
-**Files Changed:**
-- app/pages/LP/ads.vue — set localStorage visitor flag
-- app/utils/adVisitorHelper.js — helper to check visitor status
-
-**Learnings:**
-- Firebase auth state changes are asynchronous
-- This page is the entry point for virtual headshot flow
-- createAnonymousUser helper is shared across onboarding
-- EmailAuthProvider comes from firebase.auth.EmailAuthProvider
-- linkWithCredential preserves UID for conversion
-
-### PRD-5-6: Update backend to allow anonymous virtual headshot models
-**Date:** 2026-01-15
-
-**Implemented:**
-- Added isTemporaryAnonymous and anonymousUserId fields to Model schema
-- Modified onboarding/start endpoint to detect anonymous Firebase users
-- Anonymous users bypass package validation and get default medium package
-`
-
-const fallbackData: LoopResponse = {
-	activities: liveActivities,
-	columns,
+const emptyData: LoopResponse = {
+	activities: [],
+	columns: [],
 	currentTask: {
-		title: 'Create payment page with account conversion',
-		priority: 'MEDIUM',
+		title: 'No active task',
+		priority: 'LOW',
 	},
 	status: {
-		state: 'Running',
-		runningSince: '13:59:40',
-		lastUpdate: '14:14:45',
+		state: 'Idle',
+		runningSince: null,
+		lastUpdate: null,
 	},
-	logPreview,
-	logExpanded,
-	systemCount: 5,
+	logPreview: 'No progress yet.',
+	logExpanded: 'No progress yet.',
+	systemCount: 0,
 }
 
 const mergeLoopData = (next: Partial<LoopResponse>): LoopResponse => ({
-	...fallbackData,
+	...emptyData,
 	...next,
-	columns: next.columns?.length ? next.columns : fallbackData.columns,
-	activities: next.activities?.length
-		? next.activities
-		: fallbackData.activities,
-	currentTask: next.currentTask ?? fallbackData.currentTask,
-	status: next.status ?? fallbackData.status,
-	logPreview: next.logPreview ?? fallbackData.logPreview,
-	logExpanded: next.logExpanded ?? fallbackData.logExpanded,
-	systemCount: next.systemCount ?? fallbackData.systemCount,
+	columns: next.columns ?? emptyData.columns,
+	activities: next.activities ?? emptyData.activities,
+	currentTask: next.currentTask ?? emptyData.currentTask,
+	status: next.status ?? emptyData.status,
+	logPreview: next.logPreview ?? emptyData.logPreview,
+	logExpanded: next.logExpanded ?? emptyData.logExpanded,
+	systemCount: next.systemCount ?? emptyData.systemCount,
 })
 
 const formatPriority = (priority: Task['priority']) =>
@@ -407,7 +108,7 @@ const cx = (...classes: Array<string | false | null | undefined>) =>
 	classes.filter(Boolean).join(' ')
 
 export default function Home() {
-	const [data, setData] = useState<LoopResponse>(fallbackData)
+	const [data, setData] = useState<LoopResponse>(emptyData)
 	const [isSyncing, setIsSyncing] = useState(false)
 	const isSyncingRef = useRef(false)
 	const [showAddTask, setShowAddTask] = useState(false)
@@ -421,10 +122,13 @@ export default function Home() {
 	const [isRunning, setIsRunning] = useState(true)
 	const [showLog, setShowLog] = useState(false)
 	const activity = useMemo(() => {
-		const activities = data.activities.length
-			? data.activities
-			: fallbackData.activities
-		return activities[0]
+		return (
+			data.activities[0] ?? {
+				icon: 'search',
+				label: 'Idle',
+				detail: 'No live activity',
+			}
+		)
 	}, [data.activities])
 
 	const loadData = useCallback(async () => {
@@ -527,6 +231,7 @@ export default function Home() {
 		? data.logExpanded
 		: logPreviewText
 	const isLive = data.status.state === 'Running'
+	const showColumns = data.columns.length > 0
 
 	return (
 		<div
@@ -755,7 +460,8 @@ export default function Home() {
 
 				<section className="mt-6">
 					<div className="flex gap-4 overflow-x-auto pb-4">
-						{data.columns.map((column) => (
+						{showColumns ? (
+							data.columns.map((column) => (
 							<div
 								key={column.id}
 								className={cx(
@@ -793,7 +499,12 @@ export default function Home() {
 									))}
 								</div>
 							</div>
-						))}
+							))
+						) : (
+							<div className="w-full rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
+								No tasks yet.
+							</div>
+						)}
 					</div>
 				</section>
 			</div>

@@ -17,6 +17,14 @@ type GitHubIssue = {
 	pull_request?: unknown
 }
 
+type GitHubPullRequest = {
+	number: number
+	state: 'open' | 'closed'
+	merged_at: string | null
+	title: string
+	body: string | null
+}
+
 type Activity = {
 	icon: 'book' | 'search' | 'chat'
 	label: string
@@ -206,6 +214,60 @@ const pickColumn = (issue: GitHubIssue): Column['id'] => {
 	return issue.state === 'open' ? 'ready' : 'done'
 }
 
+const issueReferenceRegex = /#(\d+)/g
+
+const extractIssueReferences = (text: string | null) => {
+	if (!text) {
+		return [] as number[]
+	}
+
+	const matches = Array.from(text.matchAll(issueReferenceRegex))
+	return matches
+		.map((match) => Number(match[1]))
+		.filter((value) => Number.isFinite(value))
+}
+
+const buildPullRequestIndex = (pulls: GitHubPullRequest[]) => {
+	const open = new Set<number>()
+	const merged = new Set<number>()
+
+	pulls.forEach((pull) => {
+		const references = [
+			...extractIssueReferences(pull.title),
+			...extractIssueReferences(pull.body),
+		]
+		references.forEach((issueNumber) => {
+			if (pull.merged_at) {
+				merged.add(issueNumber)
+				open.delete(issueNumber)
+				return
+			}
+
+			if (pull.state === 'open' && !merged.has(issueNumber)) {
+				open.add(issueNumber)
+			}
+		})
+	})
+
+	return { open, merged }
+}
+
+const resolveColumn = (
+	issue: GitHubIssue,
+	openPrs: Set<number>,
+	mergedPrs: Set<number>,
+) => {
+	if (mergedPrs.has(issue.number)) {
+		return 'done'
+	}
+
+	if (openPrs.has(issue.number)) {
+		return 'review'
+	}
+
+	return pickColumn(issue)
+}
+
 const pickPriority = (labels: string[]) => {
 	if (labelMatch(labels, ['p0', 'p1', 'high', 'urgent', 'critical'])) {
 		return 'HIGH'
@@ -344,7 +406,8 @@ const buildLiveActivity = (
 
 const buildColumns = (
 	issues: GitHubIssue[],
-	activeIssueNumber?: number | null,
+	activeIssueNumber: number | null,
+	pullIndex: ReturnType<typeof buildPullRequestIndex>,
 ): Column[] => {
 	const tasks: Record<Column['id'], Task[]> = {
 		ready: [],
@@ -352,12 +415,14 @@ const buildColumns = (
 		review: [],
 		done: [],
 	}
+	const openPrs = pullIndex.open
+	const mergedPrs = pullIndex.merged
 
 	issues.forEach((issue) => {
-		const computed = pickColumn(issue)
+		const computed = resolveColumn(issue, openPrs, mergedPrs)
 		const column =
 			computed === 'ready' &&
-			activeIssueNumber &&
+			activeIssueNumber !== null &&
 			issue.state === 'open' &&
 			issue.number === activeIssueNumber
 				? 'active'
@@ -383,6 +448,27 @@ const extractActiveIssueNumber = (progressText: string) => {
 	const lastMatch = matches[matches.length - 1]
 	const number = Number(lastMatch?.[1])
 	return Number.isFinite(number) ? number : null
+}
+
+const getActiveIssueNumber = (
+	progressText: string,
+	issues: GitHubIssue[],
+) => {
+	const fromProgress = extractActiveIssueNumber(progressText)
+	if (fromProgress !== null) {
+		return fromProgress
+	}
+
+	const openIssues = issues.filter((issue) => issue.state === 'open')
+	if (!openIssues.length) {
+		return null
+	}
+
+	const sorted = [...openIssues].sort(
+		(a, b) =>
+			new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+	)
+	return sorted[0]?.number ?? null
 }
 
 const buildCurrentTask = (columns: Column[]): LoopResponse['currentTask'] => {
@@ -458,8 +544,23 @@ export async function GET() {
 			? await progressResponse.text()
 			: ''
 
-		const activeIssueNumber = extractActiveIssueNumber(progressText)
-		const columns = buildColumns(filteredIssues, activeIssueNumber)
+		const pullsResponse = await githubFetch(
+			`/repos/${owner}/${repo}/pulls?state=all&per_page=100&sort=updated`,
+		)
+		const pulls = pullsResponse.ok
+			? ((await pullsResponse.json()) as GitHubPullRequest[])
+			: []
+		const pullIndex = buildPullRequestIndex(pulls)
+
+		const activeIssueNumber = getActiveIssueNumber(
+			progressText,
+			filteredIssues,
+		)
+		const columns = buildColumns(
+			filteredIssues,
+			activeIssueNumber,
+			pullIndex,
+		)
 		const logs = buildLogs(progressText, filteredIssues)
 
 		const systemCount = filteredIssues.filter(
