@@ -420,16 +420,12 @@ export default function Home() {
 	const [activeTab, setActiveTab] = useState<'ralph' | 'system'>('ralph')
 	const [isRunning, setIsRunning] = useState(true)
 	const [showLog, setShowLog] = useState(false)
-	const [activityIndex, setActivityIndex] = useState(0)
-	const activityCount =
-		data.activities.length || fallbackData.activities.length
-
 	const activity = useMemo(() => {
 		const activities = data.activities.length
 			? data.activities
 			: fallbackData.activities
-		return activities[activityIndex % activities.length]
-	}, [activityIndex, data.activities])
+		return activities[0]
+	}, [data.activities])
 
 	const loadData = useCallback(async () => {
 		if (isSyncingRef.current) {
@@ -524,24 +520,13 @@ export default function Home() {
 		return () => clearInterval(interval)
 	}, [loadData])
 
-	useEffect(() => {
-		if (!activityCount) {
-			return
-		}
-
-		const interval = setInterval(() => {
-			setActivityIndex((current) => (current + 1) % activityCount)
-		}, 3500)
-
-		return () => clearInterval(interval)
-	}, [activityCount])
-
 	const logPreviewText = data.logPreview?.trim()
 		? data.logPreview
 		: 'No progress yet.'
 	const logExpandedText = data.logExpanded?.trim()
 		? data.logExpanded
 		: logPreviewText
+	const isLive = data.status.state === 'Running'
 
 	return (
 		<div
@@ -572,6 +557,8 @@ export default function Home() {
 								'font-medium',
 								'text-slate-600',
 								'shadow-sm',
+								'transition',
+								'hover:border-slate-300',
 								isSyncing && 'opacity-60',
 							)}
 							style={{
@@ -593,6 +580,8 @@ export default function Home() {
 								'font-semibold',
 								'text-white',
 								'shadow-sm',
+								'transition',
+								'hover:brightness-105',
 							)}
 							style={{
 								boxShadow: '0 14px 30px -18px rgba(47, 103, 246, 0.9)',
@@ -709,10 +698,25 @@ export default function Home() {
 											<p className="text-white/60">{activity.detail}</p>
 										</div>
 									</div>
-									<div className="flex items-center gap-2 text-xs text-emerald-200">
-										<span className="h-2 w-2 rounded-full bg-emerald-300" />
-										live
-									</div>
+										<div
+											className={cx(
+												'flex',
+												'items-center',
+												'gap-2',
+												'text-xs',
+												isLive ? 'text-emerald-200' : 'text-white/50',
+											)}
+										>
+											<span
+												className={cx(
+													'h-2',
+													'w-2',
+													'rounded-full',
+													isLive ? 'bg-emerald-300' : 'bg-white/30',
+												)}
+											/>
+											{isLive ? 'live' : 'idle'}
+										</div>
 								</div>
 							</PanelCard>
 
@@ -1018,6 +1022,7 @@ export default function Home() {
 										'py-2',
 										'text-xs',
 										'font-semibold',
+										'transition',
 										isCreating && 'opacity-60',
 									)}
 									disabled={isCreating}

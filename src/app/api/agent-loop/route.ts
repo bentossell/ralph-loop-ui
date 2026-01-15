@@ -165,19 +165,36 @@ const labelMatch = (labels: string[], keywords: string[]) =>
 const pickColumn = (issue: GitHubIssue): Column['id'] => {
 	const labels = issue.labels.map((label) => label.name.toLowerCase())
 
-	if (
-		issue.state === 'closed' ||
-		labelMatch(labels, ['done', 'completed', 'merged'])
-	) {
+	if (labelMatch(labels, ['merged', 'done', 'completed', 'complete'])) {
 		return 'done'
 	}
 
-	if (labelMatch(labels, ['review', 'in-review', 'needs-review'])) {
+	if (issue.state === 'closed') {
+		return 'done'
+	}
+
+	if (
+		labelMatch(labels, [
+			'review',
+			'in-review',
+			'needs-review',
+			'pr-open',
+			'pull-request',
+			'pr',
+		])
+	) {
 		return 'review'
 	}
 
 	if (
-		labelMatch(labels, ['active', 'in-progress', 'in progress', 'doing'])
+		labelMatch(labels, [
+			'active',
+			'in-progress',
+			'in progress',
+			'doing',
+			'running',
+			'workflow',
+		])
 	) {
 		return 'active'
 	}
@@ -290,17 +307,45 @@ const buildTask = (issue: GitHubIssue): Task => {
 	}
 }
 
-const buildActivities = (issues: GitHubIssue[]): Activity[] =>
-	issues.slice(0, 3).map((issue, index) => {
-		const label = issue.state === 'closed' ? 'Closed issue' : 'Updated issue'
-		return {
-			icon: activityIcons[index % activityIcons.length],
-			label,
-			detail: `#${issue.number} ${issue.title}`,
-		}
-	})
+const buildLiveActivity = (
+	columns: Column[],
+	issues: GitHubIssue[],
+): Activity[] => {
+	const activeTask = columns.find((column) => column.id === 'active')?.tasks[0]
+	if (activeTask) {
+		return [
+			{
+				icon: activityIcons[0],
+				label: 'Working',
+				detail: activeTask.title,
+			},
+		]
+	}
 
-const buildColumns = (issues: GitHubIssue[]): Column[] => {
+	const latest = issues.find((issue) => issue.state === 'open') ?? issues[0]
+	if (!latest) {
+		return [
+			{
+				icon: activityIcons[2],
+				label: 'Idle',
+				detail: 'No active tasks',
+			},
+		]
+	}
+
+	return [
+		{
+			icon: activityIcons[1],
+			label: latest.state === 'closed' ? 'Recently closed' : 'Queued',
+			detail: `#${latest.number} ${latest.title}`,
+		},
+	]
+}
+
+const buildColumns = (
+	issues: GitHubIssue[],
+	activeIssueNumber?: number | null,
+): Column[] => {
 	const tasks: Record<Column['id'], Task[]> = {
 		ready: [],
 		active: [],
@@ -309,7 +354,14 @@ const buildColumns = (issues: GitHubIssue[]): Column[] => {
 	}
 
 	issues.forEach((issue) => {
-		const column = pickColumn(issue)
+		const computed = pickColumn(issue)
+		const column =
+			computed === 'ready' &&
+			activeIssueNumber &&
+			issue.state === 'open' &&
+			issue.number === activeIssueNumber
+				? 'active'
+				: computed
 		tasks[column].push(buildTask(issue))
 	})
 
@@ -320,6 +372,17 @@ const buildColumns = (issues: GitHubIssue[]): Column[] => {
 		count: tasks[id].length,
 		tasks: tasks[id],
 	}))
+}
+
+const extractActiveIssueNumber = (progressText: string) => {
+	const matches = Array.from(progressText.matchAll(/Issue #(\d+)/gi))
+	if (!matches.length) {
+		return null
+	}
+
+	const lastMatch = matches[matches.length - 1]
+	const number = Number(lastMatch?.[1])
+	return Number.isFinite(number) ? number : null
 }
 
 const buildCurrentTask = (columns: Column[]): LoopResponse['currentTask'] => {
@@ -395,7 +458,8 @@ export async function GET() {
 			? await progressResponse.text()
 			: ''
 
-		const columns = buildColumns(filteredIssues)
+		const activeIssueNumber = extractActiveIssueNumber(progressText)
+		const columns = buildColumns(filteredIssues, activeIssueNumber)
 		const logs = buildLogs(progressText, filteredIssues)
 
 		const systemCount = filteredIssues.filter(
@@ -404,7 +468,7 @@ export async function GET() {
 
 		const payload: LoopResponse = {
 			columns,
-			activities: buildActivities(filteredIssues),
+			activities: buildLiveActivity(columns, filteredIssues),
 			currentTask: buildCurrentTask(columns),
 			status: buildStatus(filteredIssues),
 			logPreview: logs.preview,
