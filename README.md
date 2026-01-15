@@ -1,5 +1,7 @@
 # Ralph Loop UI
 
+Built by [Droid](https://factory.ai)
+
 Minimal task planner UI that reads GitHub issues and shows live loop status.
 
 Related repo: https://github.com/bentossell/agent-loop
