@@ -71,12 +71,7 @@ type LoopResponse = {
 	systemCount: number
 }
 
-type CreateIssuePayload = {
-	title?: string
-	body?: string
-	priority?: Task['priority']
-	labels?: string[]
-}
+
 
 const columnMeta = {
 	ready: {
@@ -613,48 +608,4 @@ export async function GET() {
 	}
 }
 
-export async function POST(request: Request) {
-	try {
-		const payload = (await request.json()) as CreateIssuePayload
-		const title = payload.title?.trim() ?? ''
-		if (!title) {
-			return NextResponse.json(
-				{ error: 'Title is required.' },
-				{ status: 400 },
-			)
-		}
 
-		const priority =
-			payload.priority === 'HIGH' ||
-			payload.priority === 'LOW' ||
-			payload.priority === 'MEDIUM'
-				? payload.priority
-				: 'MEDIUM'
-		const body = payload.body?.trim() ?? ''
-		const labels = normalizeLabels(payload.labels, priority)
-
-		const { owner, repo } = getRepo()
-		const response = await githubFetch(`/repos/${owner}/${repo}/issues`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				title,
-				body,
-				labels,
-			}),
-		})
-
-		if (!response.ok) {
-			const message = await response.text()
-			return NextResponse.json({ error: message }, { status: response.status })
-		}
-
-		const issue = await response.json()
-		return NextResponse.json({ issue })
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Unknown error'
-		return NextResponse.json({ error: message }, { status: 500 })
-	}
-}
