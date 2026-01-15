@@ -1,6 +1,14 @@
 'use client'
 
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import {
+	type FormEvent,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react'
 
 type Activity = {
 	icon: 'book' | 'search' | 'chat'
@@ -29,6 +37,25 @@ type Column = {
 	count: number
 	accent: string
 	tasks: Task[]
+}
+
+type LoopStatus = {
+	state: 'Running' | 'Idle' | 'Paused'
+	runningSince: string | null
+	lastUpdate: string | null
+}
+
+type LoopResponse = {
+	columns: Column[]
+	activities: Activity[]
+	currentTask: {
+		title: string
+		priority: Task['priority']
+	}
+	status: LoopStatus
+	logPreview: string
+	logExpanded: string
+	systemCount: number
 }
 
 const liveActivities: Activity[] = [
@@ -328,28 +355,193 @@ const logExpanded = `### PRD-5-1: Set ad visitor flag in localStorage
 - Anonymous users bypass package validation and get default medium package
 `
 
+const fallbackData: LoopResponse = {
+	activities: liveActivities,
+	columns,
+	currentTask: {
+		title: 'Create payment page with account conversion',
+		priority: 'MEDIUM',
+	},
+	status: {
+		state: 'Running',
+		runningSince: '13:59:40',
+		lastUpdate: '14:14:45',
+	},
+	logPreview,
+	logExpanded,
+	systemCount: 5,
+}
+
+const mergeLoopData = (next: Partial<LoopResponse>): LoopResponse => ({
+	...fallbackData,
+	...next,
+	columns: next.columns?.length ? next.columns : fallbackData.columns,
+	activities: next.activities?.length
+		? next.activities
+		: fallbackData.activities,
+	currentTask: next.currentTask ?? fallbackData.currentTask,
+	status: next.status ?? fallbackData.status,
+	logPreview: next.logPreview ?? fallbackData.logPreview,
+	logExpanded: next.logExpanded ?? fallbackData.logExpanded,
+	systemCount: next.systemCount ?? fallbackData.systemCount,
+})
+
+const formatPriority = (priority: Task['priority']) =>
+	({
+		HIGH: 'P1',
+		MEDIUM: 'P2',
+		LOW: 'P3',
+	}[priority])
+
+const formatStatusValue = (value: string | null) => value ?? '—'
+
+const normalizeCreateError = (value: unknown) => {
+	if (typeof value === 'string') {
+		return value.split('\n').slice(0, 2).join(' ')
+	}
+
+	return 'Failed to create issue.'
+}
+
 const cx = (...classes: Array<string | false | null | undefined>) =>
 	classes.filter(Boolean).join(' ')
 
 export default function Home() {
+	const [data, setData] = useState<LoopResponse>(fallbackData)
+	const [isSyncing, setIsSyncing] = useState(false)
+	const isSyncingRef = useRef(false)
+	const [showAddTask, setShowAddTask] = useState(false)
+	const [taskTitle, setTaskTitle] = useState('')
+	const [taskDescription, setTaskDescription] = useState('')
+	const [taskPriority, setTaskPriority] = useState<Task['priority']>('MEDIUM')
+	const [createError, setCreateError] = useState<string | null>(null)
+	const [isCreating, setIsCreating] = useState(false)
 	const [isExpanded, setIsExpanded] = useState(true)
 	const [activeTab, setActiveTab] = useState<'ralph' | 'system'>('ralph')
 	const [isRunning, setIsRunning] = useState(true)
 	const [showLog, setShowLog] = useState(false)
 	const [activityIndex, setActivityIndex] = useState(0)
+	const activityCount =
+		data.activities.length || fallbackData.activities.length
 
-	const activity = useMemo(
-		() => liveActivities[activityIndex],
-		[activityIndex],
+	const activity = useMemo(() => {
+		const activities = data.activities.length
+			? data.activities
+			: fallbackData.activities
+		return activities[activityIndex % activities.length]
+	}, [activityIndex, data.activities])
+
+	const loadData = useCallback(async () => {
+		if (isSyncingRef.current) {
+			return
+		}
+
+		isSyncingRef.current = true
+		setIsSyncing(true)
+
+		try {
+			const response = await fetch('/api/agent-loop', {
+				cache: 'no-store',
+			})
+
+			if (!response.ok) {
+				return
+			}
+
+			const payload = (await response.json()) as Partial<LoopResponse>
+			setData(mergeLoopData(payload))
+		} finally {
+			isSyncingRef.current = false
+			setIsSyncing(false)
+		}
+	}, [])
+
+	const closeAddTask = useCallback(() => {
+		setShowAddTask(false)
+		setCreateError(null)
+	}, [])
+
+	const resetForm = useCallback(() => {
+		setTaskTitle('')
+		setTaskDescription('')
+		setTaskPriority('MEDIUM')
+		setCreateError(null)
+	}, [])
+
+	const createTask = useCallback(
+		async (event: FormEvent<HTMLFormElement>) => {
+			event.preventDefault()
+			const title = taskTitle.trim()
+			if (!title) {
+				setCreateError('Title is required.')
+				return
+			}
+
+			setIsCreating(true)
+			setCreateError(null)
+
+			try {
+				const response = await fetch('/api/agent-loop', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						title,
+						body: taskDescription.trim(),
+						priority: taskPriority,
+					}),
+				})
+
+				if (!response.ok) {
+					const text = await response.text()
+					let message = 'Failed to create issue.'
+					if (text) {
+						try {
+							const parsed = JSON.parse(text) as { error?: unknown }
+							message = normalizeCreateError(parsed.error ?? text)
+						} catch {
+							message = normalizeCreateError(text)
+						}
+					}
+					setCreateError(message)
+					return
+				}
+
+				resetForm()
+				setShowAddTask(false)
+				await loadData()
+			} finally {
+				setIsCreating(false)
+			}
+		},
+		[loadData, resetForm, taskDescription, taskPriority, taskTitle],
 	)
 
 	useEffect(() => {
+		loadData()
+		const interval = setInterval(loadData, 15000)
+		return () => clearInterval(interval)
+	}, [loadData])
+
+	useEffect(() => {
+		if (!activityCount) {
+			return
+		}
+
 		const interval = setInterval(() => {
-			setActivityIndex((current) => (current + 1) % liveActivities.length)
+			setActivityIndex((current) => (current + 1) % activityCount)
 		}, 3500)
 
 		return () => clearInterval(interval)
-	}, [])
+	}, [activityCount])
+
+	const logPreviewText = data.logPreview?.trim()
+		? data.logPreview
+		: 'No progress yet.'
+	const logExpandedText = data.logExpanded?.trim()
+		? data.logExpanded
+		: logPreviewText
 
 	return (
 		<div
@@ -380,12 +572,16 @@ export default function Home() {
 								'font-medium',
 								'text-slate-600',
 								'shadow-sm',
+								isSyncing && 'opacity-60',
 							)}
 							style={{
 								boxShadow: '0 10px 20px -18px rgba(15, 23, 42, 0.8)',
 							}}
+							onClick={loadData}
+							disabled={isSyncing}
+							aria-busy={isSyncing}
 						>
-							Pull Latest
+							{isSyncing ? 'Syncing…' : 'Pull Latest'}
 						</button>
 						<button
 							className={cx(
@@ -400,6 +596,10 @@ export default function Home() {
 							)}
 							style={{
 								boxShadow: '0 14px 30px -18px rgba(47, 103, 246, 0.9)',
+							}}
+							onClick={() => {
+								setShowAddTask(true)
+								setCreateError(null)
 							}}
 						>
 							+ Add Task
@@ -456,7 +656,7 @@ export default function Home() {
 								>
 									System
 									<span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[11px]">
-										5
+										{data.systemCount}
 									</span>
 								</button>
 							</div>
@@ -465,7 +665,7 @@ export default function Home() {
 								<PanelCard title="Current Task">
 									<div className="flex items-start justify-between gap-4">
 										<p className="text-sm font-semibold text-white">
-											Create payment page with account conversion
+										{data.currentTask.title}
 										</p>
 										<span
 											className={cx(
@@ -478,20 +678,23 @@ export default function Home() {
 												'text-slate-900',
 											)}
 										>
-											P2
+										{formatPriority(data.currentTask.priority)}
 										</span>
 									</div>
 								</PanelCard>
 								<PanelCard title="Status">
 									<div className="space-y-1 text-sm text-white/80">
 										<p>
-											<span className="text-white/60">State:</span> Running
+										<span className="text-white/60">State:</span>{' '}
+										{data.status.state}
 										</p>
 										<p>
-											<span className="text-white/60">Running since:</span> 13:59:40
+										<span className="text-white/60">Running since:</span>{' '}
+										{formatStatusValue(data.status.runningSince)}
 										</p>
 										<p>
-											<span className="text-white/60">Last update:</span> 14:14:45
+										<span className="text-white/60">Last update:</span>{' '}
+										{formatStatusValue(data.status.lastUpdate)}
 										</p>
 									</div>
 								</PanelCard>
@@ -538,7 +741,7 @@ export default function Home() {
 									)}
 								>
 									<pre className="whitespace-pre-wrap font-mono">
-										{logPreview}
+										{logPreviewText}
 									</pre>
 								</div>
 							</div>
@@ -548,7 +751,7 @@ export default function Home() {
 
 				<section className="mt-6">
 					<div className="flex gap-4 overflow-x-auto pb-4">
-						{columns.map((column) => (
+						{data.columns.map((column) => (
 							<div
 								key={column.id}
 								className={cx(
@@ -645,8 +848,184 @@ export default function Home() {
 								'text-white/80',
 							)}
 						>
-							<pre className="whitespace-pre-wrap font-mono">{logExpanded}</pre>
+							<pre className="whitespace-pre-wrap font-mono">
+								{logExpandedText}
+							</pre>
 						</div>
+					</div>
+				</div>
+			)}
+
+			{showAddTask && (
+				<div
+					className={cx(
+						'fixed',
+						'inset-0',
+						'z-20',
+						'flex',
+						'items-center',
+						'justify-center',
+						'bg-slate-900/40',
+						'px-4',
+						'py-6',
+					)}
+				>
+					<div
+						className={cx(
+							'w-full',
+							'max-w-[480px]',
+							'rounded-2xl',
+							'bg-[#223a57]',
+							'text-white',
+							'shadow-2xl',
+						)}
+					>
+						<div
+							className={cx(
+								'flex',
+								'items-center',
+								'justify-between',
+								'border-b',
+								'border-white/10',
+								'px-4',
+								'py-3',
+							)}
+						>
+							<p className="text-sm font-semibold">Add Task</p>
+							<button
+								className="rounded-md p-1 text-white/60"
+								onClick={closeAddTask}
+								aria-label="Close add task"
+							>
+								×
+							</button>
+						</div>
+						<form
+							className="space-y-4 px-4 py-4"
+							onSubmit={createTask}
+						>
+							<div className="space-y-2">
+								<label className="text-xs font-semibold text-white/70">
+									Title
+								</label>
+								<input
+									className={cx(
+										'w-full',
+										'rounded-lg',
+										'bg-white',
+										'px-3',
+										'py-2',
+										'text-sm',
+										'font-medium',
+										'text-slate-700',
+										'placeholder:text-slate-400',
+										'outline-none',
+										'ring-1',
+										'ring-slate-200',
+										'focus:ring-2',
+										'focus:ring-blue-400',
+									)}
+									placeholder="Describe the task"
+									value={taskTitle}
+									onChange={(event) => setTaskTitle(event.target.value)}
+									required
+									disabled={isCreating}
+								/>
+							</div>
+							<div className="space-y-2">
+								<label className="text-xs font-semibold text-white/70">
+									Description
+								</label>
+								<textarea
+									className={cx(
+										'min-h-[96px]',
+										'w-full',
+										'rounded-lg',
+										'bg-white',
+										'px-3',
+										'py-2',
+										'text-sm',
+										'text-slate-700',
+										'placeholder:text-slate-400',
+										'outline-none',
+										'ring-1',
+										'ring-slate-200',
+										'focus:ring-2',
+										'focus:ring-blue-400',
+									)}
+									placeholder="Optional details"
+									value={taskDescription}
+									onChange={(event) =>
+										setTaskDescription(event.target.value)
+									}
+									disabled={isCreating}
+								/>
+							</div>
+							<div className="space-y-2">
+								<label className="text-xs font-semibold text-white/70">
+									Priority
+								</label>
+								<select
+									className={cx(
+										'w-full',
+										'rounded-lg',
+										'bg-white',
+										'px-3',
+										'py-2',
+										'text-sm',
+										'font-medium',
+										'text-slate-700',
+										'outline-none',
+										'ring-1',
+										'ring-slate-200',
+										'focus:ring-2',
+										'focus:ring-blue-400',
+									)}
+									value={taskPriority}
+									onChange={(event) =>
+										setTaskPriority(
+											event.target.value as Task['priority'],
+										)
+									}
+									disabled={isCreating}
+								>
+									<option value="HIGH">P1 - High</option>
+									<option value="MEDIUM">P2 - Medium</option>
+									<option value="LOW">P3 - Low</option>
+								</select>
+							</div>
+
+							{createError && (
+								<p className="rounded-lg bg-red-500/20 px-3 py-2 text-xs">
+									{createError}
+								</p>
+							)}
+							<div className="flex items-center justify-end gap-2">
+								<button
+									type="button"
+									className="rounded-lg bg-white/10 px-3 py-2 text-xs"
+									onClick={closeAddTask}
+									disabled={isCreating}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className={cx(
+										'rounded-lg',
+										'bg-[#2f67f6]',
+										'px-3',
+										'py-2',
+										'text-xs',
+										'font-semibold',
+										isCreating && 'opacity-60',
+									)}
+									disabled={isCreating}
+								>
+									{isCreating ? 'Creating…' : 'Create Task'}
+								</button>
+							</div>
+						</form>
 					</div>
 				</div>
 			)}
