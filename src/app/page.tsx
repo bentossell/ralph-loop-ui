@@ -104,6 +104,35 @@ const normalizeCreateError = (value: unknown) => {
 	return 'Failed to create issue.'
 }
 
+const readCachedData = () => {
+	if (typeof window === 'undefined') {
+		return null
+	}
+
+	const stored = window.localStorage.getItem('loop-data')
+	if (!stored) {
+		return null
+	}
+
+	try {
+		const parsed = JSON.parse(stored)
+		if (!parsed || typeof parsed !== 'object') {
+			return null
+		}
+		return parsed as Partial<LoopResponse>
+	} catch {
+		return null
+	}
+}
+
+const cacheData = (payload: Partial<LoopResponse>) => {
+	if (typeof window === 'undefined') {
+		return
+	}
+
+	window.localStorage.setItem('loop-data', JSON.stringify(payload))
+}
+
 const cx = (...classes: Array<string | false | null | undefined>) =>
 	classes.filter(Boolean).join(' ')
 
@@ -150,6 +179,7 @@ export default function Home() {
 
 			const payload = (await response.json()) as Partial<LoopResponse>
 			setData(mergeLoopData(payload))
+			cacheData(payload)
 		} finally {
 			isSyncingRef.current = false
 			setIsSyncing(false)
@@ -219,6 +249,10 @@ export default function Home() {
 	)
 
 	useEffect(() => {
+		const cached = readCachedData()
+		if (cached) {
+			setData(mergeLoopData(cached))
+		}
 		loadData()
 		const interval = setInterval(loadData, 15000)
 		return () => clearInterval(interval)
